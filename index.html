@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="阅读查词">
+<title>英语阅读查词</title>
+
+@media (max-width: 430px) {
+  #reader-view { font-size: 18px; padding: 16px 18px 160px; }
+  .card-word { font-size: 26px; }
+  #word-card { max-height: 80vh; padding: 18px 16px calc(24px + env(safe-area-inset-bottom)); }
+  .topbar h1 { font-size: 16px; }
+  .topbar .actions button { font-size: 14px; padding: 6px 8px; }
+  .card-actions button { padding: 11px; font-size: 14px; }
+}
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;background:#f5f5f7;color:#1d1d1f}
+.topbar{position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e5e7;z-index:10}
+.topbar h1{font-size:17px;margin:0;font-weight:600}
+.topbar .actions button{background:none;border:none;font-size:15px;color:#007aff;padding:6px 10px}
+#input-view{padding:20px;max-width:700px;margin:0 auto}
+#article-input{width:100%;height:300px;padding:14px;font-size:16px;border:1px solid #d2d2d7;border-radius:12px;font-family:inherit;resize:vertical;background:#fff;outline:none}
+#article-input:focus{border-color:#007aff}
+.primary-btn{width:100%;padding:14px;background:#007aff;color:#fff;border:none;border-radius:12px;font-size:17px;font-weight:600;margin-top:12px}
+.primary-btn:active{background:#0066d6}
+#reader-view{display:none;padding:20px 24px 140px;max-width:760px;margin:0 auto;font-size:21px;line-height:1.8}
+#article-content p{margin:0 0 1.1em}
+.word{cursor:pointer;border-radius:4px;padding:0 1px;transition:background .15s}
+.word.selected{background:#ffe066}
+#word-card{position:fixed;left:50%;bottom:0;transform:translate(-50%,110%);width:100%;max-width:720px;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,.18);padding:20px 20px calc(30px + env(safe-area-inset-bottom));transition:transform .3s cubic-bezier(.32,.72,0,1);z-index:100;max-height:75vh;overflow-y:auto}
+#word-card.show{transform:translate(-50%,0)}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+.card-word{font-size:30px;font-weight:700;letter-spacing:-.5px}
+.close-btn{background:#f2f2f7;border:none;font-size:20px;color:#86868b;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.card-phonetic{color:#86868b;font-size:15px;margin-bottom:12px;font-family:"SF Mono",monospace}
+.card-block{margin-bottom:14px}
+.card-label{font-size:12px;color:#86868b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
+.card-translation{font-size:19px;line-height:1.5}
+.card-definition{font-size:15px;line-height:1.55;color:#3a3a3c}
+.card-example{font-size:15px;line-height:1.55;color:#515154;font-style:italic;padding-left:12px;border-left:3px solid #e5e5e7}
+.card-actions{display:flex;gap:10px;margin-top:16px}
+.card-actions button{flex:1;padding:12px;border-radius:12px;border:none;font-size:15px;font-weight:600}
+.btn-add{background:#007aff;color:#fff}
+.btn-add.added{background:#34c759}
+#vocab-view{display:none;padding:20px;max-width:700px;margin:0 auto}
+.vocab-item{background:#fff;border-radius:14px;padding:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.vocab-word{font-weight:700;font-size:18px}
+.vocab-trans{color:#515154;font-size:14px;margin-top:4px;line-height:1.4}
+.vocab-del{background:none;border:none;color:#ff3b30;font-size:14px;padding:4px 8px;flex-shrink:0}
+.empty{text-align:center;color:#86868b;padding:60px 20px;font-size:16px;line-height:1.6}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;z-index:99}
+#overlay.show{display:block}
+.loading{color:#86868b;font-size:15px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1 id="page-title">英语阅读查词</h1>
+  <div class="actions">
+    <button id="nav-read">阅读</button>
+    <button id="nav-vocab">生词本</button>
+  </div>
+</div>
+<div id="input-view">
+  <p style="color:#86868b;margin-top:0;font-size:15px">粘贴一段英文文章，点击任意单词查看中文翻译和英文释义。</p >
+  <textarea id="article-input" placeholder="在此粘贴英文文章..."></textarea>
+  <button class="primary-btn" id="start-reading">开始阅读</button>
+</div>
+<div id="reader-view"><div id="article-content"></div></div>
+<div id="vocab-view"><div id="vocab-list"></div></div>
+<div id="overlay"></div>
+<div id="word-card">
+  <div class="card-header">
+    <span class="card-word" id="card-word"></span>
+    <button class="close-btn" id="close-card">×</button>
+  </div>
+  <div class="card-phonetic" id="card-phonetic"></div>
+  <div class="card-block">
+    <div class="card-label">中文</div>
+    <div class="card-translation" id="card-translation"></div>
+  </div>
+  <div class="card-block hidden" id="block-definition">
+    <div class="card-label">English</div>
+    <div class="card-definition" id="card-definition"></div>
+  </div>
+  <div class="card-block hidden" id="block-example">
+    <div class="card-label">Example</div>
+    <div class="card-example" id="card-example"></div>
+  </div>
+  <div class="card-actions">
+    <button class="btn-add" id="add-to-vocab">加入生词本</button>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var inputView=$('input-view'),readerView=$('reader-view'),vocabView=$('vocab-view');
+var wordCard=$('word-card'),overlay=$('overlay');
+var currentArticle='',currentWord='',currentSentence='',selectedSpan=null;
+
+function showView(v){
+  inputView.style.display=v==='input'?'block':'none';
+  readerView.style.display=v==='reader'?'block':'none';
+  vocabView.style.display=v==='vocab'?'block':'none';
+  $('page-title').textContent=v==='vocab'?'生词本':v==='reader'?'阅读中':'英语阅读查词';
+}
+$('nav-read').onclick=function(){showView(currentArticle?'reader':'input')};
+$('nav-vocab').onclick=function(){renderVocab();showView('vocab')};
+
+function renderArticle(text){
+  currentArticle=text;
+  var container=$('article-content');container.innerHTML='';
+  var paragraphs=text.split(/\n+/).filter(function(p){return p.trim()});
+  paragraphs.forEach(function(para){
+    var p=document.createElement('p');
+    var parts=para.split(/([A-Za-z]+(?:['\u2019][A-Za-z]+)*)/);
+    parts.forEach(function(part){
+      if(/^[A-Za-z]+(?:['\u2019][A-Za-z]+)*$/.test(part)){
+        var span=document.createElement('span');
+        span.className='word';span.textContent=part;
+        span.addEventListener('click',function(e){onWordClick(e,span)});
+        p.appendChild(span);
+      }else if(part){p.appendChild(document.createTextNode(part))}
+    });
+    container.appendChild(p);
+  });
+  showView('reader');
+}
+$('start-reading').onclick=function(){
+  var text=$('article-input').value.trim();
+  if(!text){alert('请先粘贴文章');return}
+  try{localStorage.setItem('lastArticle',text)}catch(e){}
+  renderArticle(text);
+};
+
+function onWordClick(e,span){
+  e.stopPropagation();
+  if(selectedSpan)selectedSpan.classList.remove('selected');
+  selectedSpan=span;span.classList.add('selected');
+  var word=span.textContent;
+  var para=span.closest('p');
+  currentWord=word;
+  currentSentence=getSentence(para.textContent,word);
+  openCard(word);
+}
+function getSentence(text,word){
+  var idx=text.toLowerCase().indexOf(word.toLowerCase());
+  if(idx<0)return text;
+  var start=text.lastIndexOf('.',idx),end=text.indexOf('.',idx+word.length);
+  if(start<0)start=0;else start+=1;
+  if(end<0)end=text.length;else end+=1;
+  return text.slice(start,end).trim();
+}
+
+var IRREGULAR={was:'be',were:'be',is:'be',are:'be',am:'be',been:'be',being:'be',has:'have',had:'have',having:'have',did:'do',does:'do',done:'do',doing:'do',went:'go',gone:'go',goes:'go',said:'say',says:'say',made:'make',came:'come',took:'take',taken:'take',saw:'see',seen:'see',got:'get',gotten:'get',knew:'know',known:'know',thought:'think',children:'child',men:'man',women:'woman',people:'person',feet:'foot',teeth:'tooth',mice:'mouse',better:'good',best:'good',worse:'bad',worst:'bad',found:'find',gave:'give',given:'give',left:'leave',felt:'feel',kept:'keep',brought:'bring',bought:'buy',began:'begin',begun:'begin',broke:'break',broken:'break'};
+function lemmatize(word){
+  var w=word.toLowerCase();
+  if(IRREGULAR[w])return IRREGULAR[w];
+  if(w.length>4&&w.slice(-3)==='ies')return w.slice(0,-3)+'y';
+  if(w.length>4&&w.slice(-3)==='ves')return w.slice(0,-3)+'f';
+  if(w.length>3&&w.slice(-2)==='es')return w.slice(0,-2);
+  if(w.length>2&&w.slice(-1)==='s'&&w.slice(-2)!=='ss')return w.slice(0,-1);
+  if(w.length>4&&w.slice(-3)==='ied')return w.slice(0,-3)+'y';
+  if(w.length>3&&w.slice(-2)==='ed'){
+    var base=w.slice(0,-2);
+    if(base.length>2&&base[base.length-1]===base[base.length-2]&&!/[aeiou]/.test(base[base.length-1]))return base.slice(0,-1);
+    return base;
+  }
+  if(w.length>5&&w.slice(-3)==='ing'){
+    var b=w.slice(0,-3);
+    if(b.length>2&&b[b.length-1]===b[b.length-2])b=b.slice(0,-1);
+    return b;
+  }
+  return w;
+}
+
+var cache={};
+function openCard(word){
+  $('card-word').textContent=word;
+  $('card-phonetic').textContent='';
+  $('card-translation').innerHTML='<span class="loading">查询中...</span>';
+  $('block-definition').classList.add('hidden');
+  $('block-example').classList.add('hidden');
+  var addBtn=$('add-to-vocab'),inVocab=isInVocab(word);
+  addBtn.textContent=inVocab?'已加入 ✓':'加入生词本';
+  addBtn.classList.toggle('added',inVocab);
+  wordCard.classList.add('show');overlay.classList.add('show');
+
+  var lemma=lemmatize(word);
+  if(cache[lemma]){renderCard(cache[lemma]);return}
+
+  Promise.allSettled([fetchTranslation(lemma),fetchDictionary(lemma)]).then(function(res){
+    var r={translation:'',phonetic:'',definition:'',example:''};
+    if(res[0].status==='fulfilled'&&res[0].value)r.translation=res[0].value;
+    if(res[1].status==='fulfilled'&&res[1].value){
+      r.phonetic=res[1].value.phonetic||'';
+      r.definition=res[1].value.definition||'';
+      r.example=res[1].value.example||'';
+    }
+    cache[lemma]=r;renderCard(r);
+  });
+}
+function renderCard(r){
+  $('card-phonetic').textContent=r.phonetic||'';
+  $('card-translation').textContent=r.translation||'未找到翻译';
+  if(r.definition){$('card-definition').textContent=r.definition;$('block-definition').classList.remove('hidden')}
+  if(r.example){$('card-example').textContent=r.example;$('block-example').classList.remove('hidden')}
+}
+function closeCard(){
+  wordCard.classList.remove('show');overlay.classList.remove('show');
+  if(selectedSpan){selectedSpan.classList.remove('selected');selectedSpan=null}
+}
+$('close-card').onclick=closeCard;
+overlay.onclick=closeCard;
+
+function fetchTranslation(word){
+  var url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(word)+'&langpair=en|zh-CN';
+  return fetch(url).then(function(res){return res.ok?res.json():null}).then(function(data){
+    if(!data)return '';
+    var text=(data.responseData&&data.responseData.translatedText)||'';
+    if(text.toLowerCase()===word.toLowerCase()){
+      var m=(data.matches||[]).filter(function(x){return x.translation&&x.translation.toLowerCase()!==word.toLowerCase()})[0];
+      if(m)text=m.translation;
+    }
+    return text;
+  }).catch(function(){return ''});
+}
+function fetchDictionary(word){
+  var url='https://api.dictionaryapi.dev/api/v2/entries/en/'+encodeURIComponent(word);
+  return fetch(url).then(function(res){return res.ok?res.json():null}).then(function(data){
+    if(!Array.isArray(data)||!data[0])return null;
+    var entry=data[0],phonetic=entry.phonetic||'';
+    if(!phonetic&&entry.phonetics){
+      var p=entry.phonetics.filter(function(x){return x.text})[0];
+      if(p)phonetic=p.text;
+    }
+    var meaning=entry.meanings&&entry.meanings[0];
+    var def=meaning&&meaning.definitions&&meaning.definitions[0];
+    return {phonetic:phonetic,definition:def?def.definition:'',example:(def&&def.example)||''};
+  }).catch(function(){return null});
+}
+
+function getVocab(){try{return JSON.parse(localStorage.getItem('vocab')||'[]')}catch(e){return[]}}
+function saveVocab(list){try{localStorage.setItem('vocab',JSON.stringify(list))}catch(e){}}
+function isInVocab(word){return getVocab().some(function(v){return v.word.toLowerCase()===word.toLowerCase()})}
+$('add-to-vocab').onclick=function(){
+  if(isInVocab(currentWord))return;
+  var list=getVocab();
+  list.unshift({word:currentWord,translation:$('card-translation').textContent,sentence:currentSentence,added:Date.now()});
+  saveVocab(list);
+  $('add-to-vocab').textContent='已加入 ✓';
+  $('add-to-vocab').classList.add('added');
+};
+function renderVocab(){
+  var list=getVocab(),container=$('vocab-list');
+  if(!list.length){container.innerHTML='<div class="empty">生词本还是空的<br>阅读时点击单词加入</div>';return}
+  container.innerHTML=list.map(function(v,i){
+    return '<div class="vocab-item"><div><div class="vocab-word">'+esc(v.word)+'</div><div class="vocab-trans">'+esc(v.translation||'')+'</div></div><button class="vocab-del" data-i="'+i+'">删除</button></div>';
+  }).join('');
+  Array.prototype.forEach.call(container.querySelectorAll('.vocab-del'),function(btn){
+    btn.onclick=function(){
+      var list=getVocab();list.splice(parseInt(btn.dataset.i,10),1);
+      saveVocab(list);renderVocab();
+    };
+  });
+}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+
+try{
+  var saved=localStorage.getItem('lastArticle');
+  if(saved){$('article-input').value=saved;renderArticle(saved)}
+}catch(e){}
+})();
+</script>
+</body>
+</html>
